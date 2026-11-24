@@ -4,6 +4,8 @@ A tiny pixel-art office that visualizes your local [opencode](https://opencode.a
 
 Everything runs on your machine. The server opens opencode's SQLite database **read-only** — no API keys, no HTTP calls to opencode, no telemetry.
 
+**Live demo (static, sample data):** https://markchristopheralcantara.github.io/pixel-office/
+
 ```
 ┌─ PIXEL OFFICE ─────────────────────────────────────┐
 │  website       3D VIDEO                            │
@@ -35,6 +37,20 @@ No opencode history yet, or want to see the office fully populated? Open the dem
 The demo is sample data only and never touches your database.
 
 > If port 4777 is busy (and you didn't set `PIXEL_OFFICE_PORT`), the server automatically tries 4778, 4779, … and prints the URL it settled on.
+
+## Static demo on GitHub Pages
+
+The live app needs Node.js to read `opencode.db`, so GitHub Pages can only host the demo. The workflow in `.github/workflows/pages.yml` builds a static snapshot on every push to `main` and deploys it to Pages.
+
+Build and preview it locally:
+
+```sh
+npm run build:demo
+npm run preview:demo
+# open http://127.0.0.1:4780/pixel-office/
+```
+
+The build writes `dist/` with `demo/state.json` plus one session file per demo agent. The frontend sees `window.PIXEL_OFFICE_STATIC`, reads those files instead of `/api/*`, and shifts timestamps to the current time on load so the feed always looks fresh.
 
 ## What you're looking at
 

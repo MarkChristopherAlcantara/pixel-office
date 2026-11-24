@@ -50,9 +50,12 @@ const dom = {
 };
 
 const params = new URLSearchParams(location.search);
+const STATIC_DEMO = !!window.PIXEL_OFFICE_STATIC;
+const STATIC_BUILT_AT = Number(window.PIXEL_OFFICE_BUILT_AT || 0);
+const STATIC_REPO = "https://github.com/MarkChristopherAlcantara/pixel-office";
 const store = {
   state: null,
-  demo: params.get("demo") === "1",
+  demo: STATIC_DEMO || params.get("demo") === "1",
   focusRoomId: null,
   selectedAgentId: null,
   drawerFilter: "all",
@@ -179,6 +182,16 @@ function renderChrome(state) {
 
   dom.demoBtn.textContent = demo ? "BACK TO THE LIVE OFFICE" : "VIEW THE DEMO OFFICE";
   dom.helpDemo.textContent = demo ? "BACK TO LIVE OFFICE" : "VIEW DEMO OFFICE";
+  if (STATIC_DEMO) {
+    dom.floorLine.textContent = "FLOOR 07 · STATIC DEMO · SAMPLE DATA";
+    dom.sourceLine.textContent = "STATIC DEMO";
+    dom.sourceSub.textContent = "GITHUB PAGES · SAMPLE DATA";
+    dom.demoBtn.textContent = "RELOAD THE DEMO";
+    dom.helpDemo.textContent = "VIEW SOURCE ON GITHUB";
+  }
+  dom.demoBadge.title = STATIC_DEMO
+    ? "Static GitHub Pages demo — sample data only"
+    : "Back to the live office";
 
   const quiet = rooms.length === 0;
   dom.emptyState.classList.toggle("hidden", !quiet);
@@ -238,6 +251,10 @@ function notifyAttention(rooms) {
 function connect() {
   closeStream();
   stopPolling();
+  if (STATIC_DEMO) {
+    fetchState();
+    return;
+  }
   const url = `/api/events${store.demo ? "?demo=1" : ""}`;
   try {
     const es = new EventSource(url);
@@ -280,23 +297,70 @@ function closeStream() {
   }
 }
 
+/**
+ * The static Pages build is a snapshot taken at build time. Move every
+ * timestamp forward by the elapsed time so the feed and idle timers look
+ * current whenever someone opens the demo.
+ */
+function freshenStaticState(data) {
+  const now = Date.now();
+  const builtAt = Number(data.generatedAt) || STATIC_BUILT_AT || now;
+  const shift = Math.max(0, now - builtAt);
+  if (!shift) return;
+  for (const room of data.rooms || []) {
+    if (room.lastActive) room.lastActive += shift;
+    for (const agent of room.agents || []) {
+      for (const key of ["startedAt", "updatedAt", "busySince", "idleSince"]) {
+        if (agent[key]) agent[key] += shift;
+      }
+    }
+  }
+  for (const item of data.feed || []) {
+    if (item.time) item.time += shift;
+  }
+  data.generatedAt = now;
+}
+
+function freshenStaticDetail(data) {
+  const now = Date.now();
+  const builtAt = Number(data.generatedAt) || STATIC_BUILT_AT || now;
+  const shift = Math.max(0, now - builtAt);
+  if (!shift) return;
+  if (data.session) {
+    if (data.session.created) data.session.created += shift;
+    if (data.session.updated) data.session.updated += shift;
+  }
+  for (const item of data.items || []) {
+    if (item.time) item.time += shift;
+  }
+}
+
 async function fetchState() {
   try {
-    const res = await fetch(`/api/state${store.demo ? "?demo=1" : ""}`, { cache: "no-store" });
+    const stateUrl = STATIC_DEMO ? "./demo/state.json" : `/api/state${store.demo ? "?demo=1" : ""}`;
+    const res = await fetch(stateUrl, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    if (STATIC_DEMO) freshenStaticState(data);
     store.lastSync = Date.now();
     applyState(data);
+    if (STATIC_DEMO) {
+      store.connected = true;
+      updateConnection();
+    }
     if (store.connected) stopPolling();
   } catch (error) {
     if (!store.state) {
       dom.emptyState.classList.remove("hidden");
-      dom.emptyTitle.textContent = "CAN'T REACH THE OFFICE SERVER";
-      dom.emptyText.textContent = "The pixel office server is not answering. Make sure it is running, then retry.";
-      dom.emptyHint.textContent = "node server/index.mjs";
+      dom.emptyTitle.textContent = STATIC_DEMO ? "CAN'T LOAD THE STATIC DEMO" : "CAN'T REACH THE OFFICE SERVER";
+      dom.emptyText.textContent = STATIC_DEMO
+        ? "The demo snapshot is missing. Run the static build, then serve the dist folder again."
+        : "The pixel office server is not answering. Make sure it is running, then retry.";
+      dom.emptyHint.textContent = STATIC_DEMO ? "npm run build:demo" : "node server/index.mjs";
       dom.statusLed.classList.add("error");
       dom.statusText.textContent = "OFFLINE";
       dom.dbLine.textContent = error?.message || "no response";
+      if (STATIC_DEMO) dom.syncLabel.textContent = "NO SNAPSHOT";
     }
   }
 }
@@ -313,6 +377,16 @@ function stopPolling() {
 }
 
 function updateConnection() {
+  if (STATIC_DEMO) {
+    dom.syncLabel.classList.remove("stale");
+    dom.syncLabel.textContent = store.state ? "STATIC DEMO" : "LOADING";
+    if (store.state && store.state.source?.ok === false) {
+      dom.statusLed.classList.add("error");
+    } else if (store.state) {
+      dom.statusLed.classList.remove("error");
+    }
+    return;
+  }
   const age = store.lastSync ? Date.now() - store.lastSync : Infinity;
   const sourceOk = store.state?.source?.ok !== false;
   const stale = age > 12000 || !sourceOk;
@@ -341,6 +415,10 @@ function updateConnection() {
 }
 
 function setDemo(flag) {
+  if (STATIC_DEMO) {
+    toast("Static GitHub Pages demo — run PIXEL OFFICE locally for live sessions.");
+    return;
+  }
   const next = !!flag;
   if (next === store.demo) {
     if (next) toast("You are already in the demo office.");
@@ -434,13 +512,15 @@ async function openAgent(id) {
 
   const token = ++store.detailToken;
   try {
-    const res = await fetch(`/api/session/${encodeURIComponent(id)}${store.demo ? "?demo=1" : ""}`, {
-      cache: "no-store",
-    });
+    const detailUrl = STATIC_DEMO
+      ? `./demo/sessions/${encodeURIComponent(id)}.json`
+      : `/api/session/${encodeURIComponent(id)}${store.demo ? "?demo=1" : ""}`;
+    const res = await fetch(detailUrl, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (token !== store.detailToken) return;
     if (!data.ok) throw new Error(data.error || "The session could not be opened");
+    if (STATIC_DEMO) freshenStaticDetail(data);
     store.detail = data;
     ui.renderDrawer(dom.drawerBody, {
       detail: data,
@@ -518,10 +598,20 @@ function bindUi() {
   });
   dom.helpDemo.addEventListener("click", () => {
     closeHelp();
+    if (STATIC_DEMO) {
+      window.open(STATIC_REPO, "_blank", "noopener");
+      return;
+    }
     setDemo(!store.demo);
   });
 
-  dom.demoBtn.addEventListener("click", () => setDemo(!store.demo));
+  dom.demoBtn.addEventListener("click", () => {
+    if (STATIC_DEMO) {
+      connect();
+      return;
+    }
+    setDemo(!store.demo);
+  });
   dom.demoBadge.addEventListener("click", () => setDemo(false));
   dom.demoBadge.title = "Back to the live office";
   dom.retryBtn.addEventListener("click", () => {

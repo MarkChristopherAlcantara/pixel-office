@@ -6,7 +6,9 @@
   "description": "A pixel-art office that watches your local opencode sessions in real time. Read-only, no API keys.",
   "scripts": {
     "start": "node server/index.mjs",
-    "dev": "node --watch server/index.mjs"
+    "dev": "node --watch server/index.mjs",
+    "build:demo": "node scripts/build-demo.mjs",
+    "preview:demo": "node scripts/preview-demo.mjs"
   },
   "engines": {
     "node": ">=22.5"
