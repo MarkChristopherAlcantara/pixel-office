@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>PIXEL OFFICE</title>
+  <meta name="description" content="A pixel-art office that watches your local opencode sessions in real time." />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/office.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="Open room list">☰</button>
+      <div class="brand">
+        <canvas class="brand-mark" id="brandMark" width="52" height="52" aria-hidden="true"></canvas>
+        <div class="brand-copy">
+          <h1>PIXEL<span>OFFICE</span></h1>
+          <p id="floorLine">FLOOR 07 · OPENCODE SESSIONS</p>
+        </div>
+      </div>
+
+      <div class="stats" id="stats" aria-label="Office counters"></div>
+
+      <div class="topbar-right">
+        <div class="clock" title="Local time">
+          <canvas id="clockIcon" width="32" height="32" aria-hidden="true"></canvas>
+          <div>
+            <strong id="clockTime">--:--</strong>
+            <span id="clockDate">---</span>
+          </div>
+        </div>
+        <span class="badge demo-badge hidden" id="demoBadge">DEMO</span>
+        <span class="badge live-badge" id="liveBadge"><i></i><span>LIVE</span></span>
+        <button class="icon-btn" id="helpBtn" aria-label="Help">?</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="side-head">
+          <div class="side-title">THE FLOOR <span id="roomCount">00</span></div>
+          <label class="search">
+            <span aria-hidden="true">/</span>
+            <input id="searchInput" type="search" placeholder="find a room or agent…" autocomplete="off" spellcheck="false" />
+          </label>
+        </div>
+        <div class="room-list" id="roomList"></div>
+        <div class="side-foot">
+          <div class="source-line" id="sourceLine" title="">READING OPENCODE</div>
+          <div class="source-sub" id="sourceSub">read-only · local</div>
+        </div>
+      </aside>
+      <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+      <section class="stage-col">
+        <div class="stage-head">
+          <div class="stage-title">
+            <span class="tick" aria-hidden="true">▮</span>
+            <span id="stageLabel">ALL ROOMS</span>
+            <button class="clear-focus hidden" id="clearFocus">×</button>
+          </div>
+          <div class="stage-tools">
+            <span class="stage-hint" id="stageHint">click a character to open its file</span>
+            <span class="sync" id="syncLabel">SYNCED</span>
+          </div>
+          <span class="stage-pan" aria-hidden="true">SWIPE TO PAN →</span>
+        </div>
+
+        <div class="stage" id="stage">
+          <canvas id="scene" aria-label="Pixel-art office with live agent sessions"></canvas>
+          <div class="stage-scanlines" aria-hidden="true"></div>
+          <div class="empty-state hidden" id="emptyState">
+            <div class="empty-art" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <h2 id="emptyTitle">THE OFFICE IS QUIET</h2>
+            <p id="emptyText">No opencode sessions in the last few minutes. Start one in any project and a character will walk in.</p>
+            <pre id="emptyHint"><code>opencode</code></pre>
+            <div class="empty-actions">
+              <button class="btn primary" id="demoBtn">View the demo office</button>
+              <button class="btn" id="retryBtn">Retry</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed">
+          <div class="feed-head">
+            <span>OFFICE FEED</span>
+            <span class="feed-count" id="feedCount">00</span>
+          </div>
+          <div class="feed-list" id="feedList"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar">
+      <div class="status-left">
+        <span class="status-led" id="statusLed"></span>
+        <span id="statusText">READING OPENCODE DATABASE</span>
+        <span class="sep">·</span>
+        <span id="dbLine">…</span>
+      </div>
+      <div class="status-right">
+        <span>READ-ONLY / NO API KEYS</span>
+        <span class="sep">·</span>
+        <span id="versionLine">v0.1.0</span>
+      </div>
+    </footer>
+  </div>
+
+  <div class="drawer-scrim" id="drawerScrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true" aria-label="Agent details">
+    <div class="drawer-top">
+      <button class="icon-btn" id="drawerClose" aria-label="Close details">×</button>
+      <span class="drawer-kicker">SESSION FILE</span>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+
+  <div class="modal-wrap hidden" id="helpModal">
+    <div class="modal">
+      <div class="modal-head">
+        <span>HOW THE OFFICE WORKS</span>
+        <button class="icon-btn" id="helpClose" aria-label="Close help">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="legend-grid">
+          <div><i class="lg working"></i><b>Working</b><span>Seated, typing. The bubble names the current tool.</span></div>
+          <div><i class="lg attention"></i><b>Needs you</b><span>Hand raised and a blinking alert. Answer in opencode.</span></div>
+          <div><i class="lg idle"></i><b>At ease</b><span>Turn finished. After a while they wander to the break room.</span></div>
+          <div><i class="lg error"></i><b>Stuck</b><span>A turn ended with an error. Open the session to see it.</span></div>
+        </div>
+        <div class="modal-cols">
+          <div>
+            <h3>CONTROLS</h3>
+            <ul class="keys">
+              <li><kbd>click</kbd> open a character</li>
+              <li><kbd>/</kbd> search the floor</li>
+              <li><kbd>Esc</kbd> close the file / focus</li>
+              <li><kbd>drag</kbd> pan the office on small screens</li>
+            </ul>
+          </div>
+          <div>
+            <h3>THE DATA</h3>
+            <p>Every state comes from opencode's local SQLite database, opened <b>read-only</b>. No HTTP API, no keys, no cloud. Sessions are rooms; messages become activity. Nothing leaves this computer.</p>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span>PIXEL OFFICE v0.1.0</span>
+          <button class="btn" id="helpDemo">VIEW DEMO OFFICE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast" role="status"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
